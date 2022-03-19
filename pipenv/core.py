@@ -996,12 +996,14 @@ def get_downloads_info(project, names_map, section):
     return info
 
 
-def overwrite_dev(prod, dev):
-    dev_keys = set(list(dev.keys()))
-    prod_keys = set(list(prod.keys()))
+def overwrite_deps(source, target):
+    dev_keys = set(list(target.keys()))
+    prod_keys = set(list(source.keys()))
     for pkg in dev_keys & prod_keys:
-        dev[pkg] = prod[pkg]
-    return dev
+        if target[pkg] != source[pkg]:
+            vistir.misc.echo(f"Overwriting package {pkg} version from {target[pkg]['version']} to {source[pkg]['version']}", fg="yellow")
+            target[pkg] = source[pkg]
+    return target
 
 
 def do_lock(
@@ -1011,6 +1013,7 @@ def do_lock(
     clear=False,
     pre=False,
     keep_outdated=False,
+    consider_dev=False,
     write=True,
     pypi_mirror=None,
 ):
@@ -1033,14 +1036,18 @@ def do_lock(
         for k, v in lockfile[section].copy().items():
             if not hasattr(v, "keys"):
                 del lockfile[section][k]
-    # Ensure that develop inherits from default.
-    dev_packages = project.dev_packages.copy()
-    dev_packages = overwrite_dev(project.packages, dev_packages)
+
+    if not consider_dev:
+        # Ensure that develop inherits from default.
+        dev_packages = project.dev_packages.copy()
+        overwrite_deps(project.packages, dev_packages)
     # Resolve dev-package dependencies, with pip-tools.
     for is_dev in [True, False]:
         pipfile_section = "dev-packages" if is_dev else "packages"
         if project.pipfile_exists:
             packages = project.parsed_pipfile.get(pipfile_section, {})
+            if consider_dev and is_dev:
+                packages.update(project.parsed_pipfile.get("packages", {}))
         else:
             packages = getattr(project, pipfile_section.replace("-", "_"))
 
@@ -1090,8 +1097,12 @@ def do_lock(
                 missing = packages - new_lockfile
                 for missing_pkg in missing:
                     lockfile[key][missing_pkg] = cached_lockfile[key][missing_pkg].copy()
-    # Overwrite any develop packages with default packages.
-    lockfile["develop"].update(overwrite_dev(lockfile.get("default", {}), lockfile["develop"]))
+
+    if consider_dev:
+        lockfile["default"].update(overwrite_deps(lockfile.get("develop", {}), lockfile.get("default", {})))
+    else:
+        # Overwrite any develop packages with default packages.
+        lockfile["develop"].update(overwrite_deps(lockfile.get("default", {}), lockfile["develop"]))
     if write:
         project.write_lockfile(lockfile)
         click.echo(

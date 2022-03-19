@@ -335,6 +335,7 @@ def lock(
         clear=state.clear,
         pre=pre,
         keep_outdated=state.installstate.keep_outdated,
+        consider_dev=state.lockoptions.consider_dev,
         pypi_mirror=state.pypi_mirror,
         write=not state.quiet,
     )

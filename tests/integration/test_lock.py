@@ -1,7 +1,9 @@
 import json
 import os
 import sys
+import textwrap
 from pathlib import Path
+from pprint import pprint
 
 import pytest
 
@@ -96,7 +98,6 @@ yarl = "==1.3.0"
 @pytest.mark.lock
 @pytest.mark.keep_outdated
 def test_lock_keep_outdated(PipenvInstance):
-
     with PipenvInstance() as p:
         with open(p.pipfile_path, 'w') as f:
             contents = """
@@ -804,3 +805,41 @@ def test_default_lock_overwrite_dev_lock(PipenvInstance):
         assert c.returncode == 0
         assert p.lockfile["default"]["click"]["version"] == "==6.7"
         assert p.lockfile["develop"]["click"]["version"] == "==6.7"
+
+
+@pytest.mark.lock
+def test_conflict_do_not_consider_dev_packages(PipenvInstance):
+    with PipenvInstance(chdir=True) as p:
+        with open(p.pipfile_path, 'w') as f:
+            contents = textwrap.dedent("""
+                [packages]
+                requests = "<2.20"
+                [dev-packages]
+                idna = "<2.7"
+                """)
+            f.write(contents)
+
+        c = p.pipenv("lock")
+
+        assert c.returncode == 0
+        assert p.lockfile["default"]["idna"]["version"] == "==2.7"
+        assert p.lockfile["develop"]["idna"]["version"] == "==2.7"
+
+
+@pytest.mark.lock
+def test_conflict_consider_dev_packages(PipenvInstance):
+    with PipenvInstance(chdir=True) as p:
+        with open(p.pipfile_path, 'w') as f:
+            contents = textwrap.dedent("""
+                [packages]
+                requests = "<2.20"
+                [dev-packages]
+                idna = "<2.7"
+                """)
+            f.write(contents)
+
+        c = p.pipenv("lock --consider-dev")
+
+        assert c.returncode == 0
+        assert p.lockfile["default"]["idna"]["version"] == "==2.6"
+        assert p.lockfile["develop"]["idna"]["version"] == "==2.6"

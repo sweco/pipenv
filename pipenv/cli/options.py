@@ -90,6 +90,7 @@ class InstallState:
 class LockOptions:
     def __init__(self):
         self.dev_only = False
+        self.consider_dev = False
         self.emit_requirements = False
         self.emit_requirements_header = False
 
@@ -357,6 +358,16 @@ def dev_only_flag(f):
                   help="Emit development dependencies *only* (overrides --dev)", callback=callback)(f)
 
 
+def consider_dev_flag(f):
+    def callback(ctx, param, value):
+        state = ctx.ensure_object(State)
+        if value:
+            state.lockoptions.consider_dev = value
+        return value
+    return option("--consider-dev", default=False, is_flag=True, expose_value=False,
+                  help="Consider development dependencies when locking default", callback=callback)(f)
+
+
 def code_option(f):
     def callback(ctx, param, value):
         state = ctx.ensure_object(State)
@@ -447,6 +458,7 @@ def lock_options(f):
     f = emit_requirements_flag(f)
     f = emit_requirements_header_flag(f)
     f = dev_only_flag(f)
+    f = consider_dev_flag(f)
     return f
 
 
